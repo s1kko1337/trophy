@@ -173,6 +173,24 @@ private fun OsmMapView(
 ) {
     val context = LocalContext.current
 
+    // Храним ссылку на MapView для корректной очистки
+    val mapViewRef = remember { mutableMapViewRef() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            // Очищаем ресурсы MapView при уничтожении
+            mapViewRef.value?.let { mapView ->
+                mapView.overlays.forEach { overlay ->
+                    if (overlay is Marker) {
+                        overlay.setOnMarkerClickListener(null)
+                    }
+                }
+                mapView.overlays.clear()
+                mapView.onDetach()
+            }
+        }
+    }
+
     AndroidView(
         factory = { ctx ->
             MapView(ctx).apply {
@@ -182,10 +200,16 @@ private fun OsmMapView(
 
                 // Центр России по умолчанию
                 controller.setCenter(GeoPoint(55.7558, 37.6173))
+                mapViewRef.value = this
             }
         },
         update = { mapView ->
-            // Очищаем старые маркеры
+            // Очищаем слушатели старых маркеров перед удалением
+            mapView.overlays.forEach { overlay ->
+                if (overlay is Marker) {
+                    overlay.setOnMarkerClickListener(null)
+                }
+            }
             mapView.overlays.clear()
 
             // Добавляем маркеры для всех мест
@@ -237,6 +261,13 @@ private fun OsmMapView(
         modifier = modifier
     )
 }
+
+/**
+ * Контейнер для хранения ссылки на MapView.
+ */
+private class MapViewHolder(var value: MapView? = null)
+
+private fun mutableMapViewRef() = MapViewHolder()
 
 /**
  * Карточка с информацией о месте.

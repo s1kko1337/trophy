@@ -78,38 +78,80 @@ class ExportImportService @Inject constructor(
                 BufferedReader(InputStreamReader(inputStream)).readText()
             } ?: return Result.failure(Exception("Не удалось прочитать файл"))
 
-            val exportData = json.decodeFromString<ExportData>(jsonString)
+            val exportData = try {
+                json.decodeFromString<ExportData>(jsonString)
+            } catch (e: Exception) {
+                return Result.failure(Exception("Неверный формат файла: ${e.message}"))
+            }
 
             var catchesImported = 0
             var locationsImported = 0
             var equipmentImported = 0
+            var catchesFailed = 0
+            var locationsFailed = 0
+            var equipmentFailed = 0
+            val errors = mutableListOf<String>()
 
             // Импорт мест
             exportData.locations.forEach { exportLocation ->
-                val location = exportLocation.toLocation()
-                locationRepository.insertLocation(location)
-                locationsImported++
+                try {
+                    val location = exportLocation.toLocationSafe()
+                    if (location != null) {
+                        locationRepository.insertLocation(location)
+                        locationsImported++
+                    } else {
+                        locationsFailed++
+                        errors.add("Место '${exportLocation.name}': неверный тип")
+                    }
+                } catch (e: Exception) {
+                    locationsFailed++
+                    errors.add("Место '${exportLocation.name}': ${e.message}")
+                }
             }
 
             // Импорт снаряжения
             exportData.equipment.forEach { exportEquipment ->
-                val equipment = exportEquipment.toEquipment()
-                equipmentRepository.insertEquipment(equipment)
-                equipmentImported++
+                try {
+                    val equipment = exportEquipment.toEquipmentSafe()
+                    if (equipment != null) {
+                        equipmentRepository.insertEquipment(equipment)
+                        equipmentImported++
+                    } else {
+                        equipmentFailed++
+                        errors.add("Снаряжение '${exportEquipment.name}': неверный тип")
+                    }
+                } catch (e: Exception) {
+                    equipmentFailed++
+                    errors.add("Снаряжение '${exportEquipment.name}': ${e.message}")
+                }
             }
 
             // Импорт уловов
             exportData.catches.forEach { exportCatch ->
-                val catch = exportCatch.toCatch()
-                catchRepository.insertCatch(catch)
-                catchesImported++
+                try {
+                    val catch = exportCatch.toCatchSafe()
+                    if (catch != null) {
+                        catchRepository.insertCatch(catch)
+                        catchesImported++
+                    } else {
+                        catchesFailed++
+                        errors.add("Улов '${exportCatch.species}': неверные данные")
+                    }
+                } catch (e: Exception) {
+                    catchesFailed++
+                    errors.add("Улов '${exportCatch.species}': ${e.message}")
+                }
             }
 
             Result.success(
                 ImportResult(
                     catchesImported = catchesImported,
                     locationsImported = locationsImported,
-                    equipmentImported = equipmentImported
+                    equipmentImported = equipmentImported,
+                    catchesFailed = catchesFailed,
+                    locationsFailed = locationsFailed,
+                    equipmentFailed = equipmentFailed,
+                    errors = errors.take(10) // Ограничиваем количество ошибок
                 )
             )
         } catch (e: Exception) {
@@ -124,9 +166,15 @@ class ExportImportService @Inject constructor(
 data class ImportResult(
     val catchesImported: Int,
     val locationsImported: Int,
-    val equipmentImported: Int
+    val equipmentImported: Int,
+    val catchesFailed: Int = 0,
+    val locationsFailed: Int = 0,
+    val equipmentFailed: Int = 0,
+    val errors: List<String> = emptyList()
 ) {
     val total: Int get() = catchesImported + locationsImported + equipmentImported
+    val totalFailed: Int get() = catchesFailed + locationsFailed + equipmentFailed
+    val hasErrors: Boolean get() = totalFailed > 0
 }
 
 /**
@@ -223,3 +271,52 @@ private fun ExportEquipment.toEquipment() = Equipment(
     equipmentType = com.example.trophy.domain.model.EquipmentType.valueOf(equipmentType),
     activityType = com.example.trophy.domain.model.ActivityType.valueOf(activityType)
 )
+
+// Safe conversion functions that return null on invalid data
+
+private fun ExportCatch.toCatchSafe(): Catch? {
+    val parsedActivityType = com.example.trophy.domain.model.ActivityType.entries
+        .find { it.name == activityType } ?: return null
+    val parsedDate = try { LocalDate.parse(catchDate) } catch (e: Exception) { return null }
+    val parsedTime = catchTime?.let {
+        try { LocalTime.parse(it) } catch (e: Exception) { null }
+    }
+
+    return Catch(
+        species = species,
+        activityType = parsedActivityType,
+        weight = weight,
+        length = length,
+        quantity = quantity,
+        catchDate = parsedDate,
+        catchTime = parsedTime,
+        notes = notes
+    )
+}
+
+private fun ExportLocation.toLocationSafe(): Location? {
+    val parsedLocationType = com.example.trophy.domain.model.LocationType.entries
+        .find { it.name == locationType } ?: return null
+
+    return Location(
+        name = name,
+        latitude = latitude,
+        longitude = longitude,
+        locationType = parsedLocationType,
+        description = description
+    )
+}
+
+private fun ExportEquipment.toEquipmentSafe(): Equipment? {
+    val parsedEquipmentType = com.example.trophy.domain.model.EquipmentType.entries
+        .find { it.name == equipmentType } ?: return null
+    val parsedActivityType = com.example.trophy.domain.model.ActivityType.entries
+        .find { it.name == activityType } ?: return null
+
+    return Equipment(
+        name = name,
+        description = description,
+        equipmentType = parsedEquipmentType,
+        activityType = parsedActivityType
+    )
+}

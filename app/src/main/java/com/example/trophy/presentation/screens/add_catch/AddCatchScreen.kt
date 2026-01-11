@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -200,7 +201,9 @@ fun AddCatchScreen(
                     label = { Text("Вес (кг)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    isError = uiState.weightError != null,
+                    supportingText = uiState.weightError?.let { { Text(it) } }
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))
@@ -212,7 +215,9 @@ fun AddCatchScreen(
                         label = { Text("Длина (см)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        singleLine = true,
+                        isError = uiState.lengthError != null,
+                        supportingText = uiState.lengthError?.let { { Text(it) } }
                     )
                 } else {
                     OutlinedTextField(
@@ -221,7 +226,9 @@ fun AddCatchScreen(
                         label = { Text("Количество") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        singleLine = true,
+                        isError = uiState.quantityError != null,
+                        supportingText = uiState.quantityError?.let { { Text(it) } }
                     )
                 }
             }
@@ -603,6 +610,27 @@ fun AddCatchScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+
+    // Duplicate Warning Dialog
+    if (uiState.showDuplicateWarning) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDuplicateWarning() },
+            title = { Text("Возможный дубликат") },
+            text = {
+                Text("Похожая запись уже существует (тот же вид, дата и место). Всё равно сохранить?")
+            },
+            confirmButton = {
+                Button(onClick = { viewModel.saveIgnoringDuplicate() }) {
+                    Text("Сохранить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissDuplicateWarning() }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     // Camera Screen

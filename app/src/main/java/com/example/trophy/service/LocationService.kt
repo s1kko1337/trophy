@@ -11,6 +11,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -40,17 +41,34 @@ class LocationService @Inject constructor(
             ) == PackageManager.PERMISSION_GRANTED
     }
 
+    companion object {
+        private const val LOCATION_TIMEOUT_MS = 30_000L // 30 секунд таймаут
+    }
+
     /**
-     * Получает текущее местоположение.
+     * Получает текущее местоположение с таймаутом.
+     * При таймауте возвращает последнее известное местоположение.
      * @return Location или null если не удалось получить
      * @throws SecurityException если нет разрешений
-     * @throws Exception если произошла ошибка
      */
     suspend fun getCurrentLocation(): Location? {
         if (!hasLocationPermission()) {
             throw SecurityException("Нет разрешения на получение местоположения")
         }
 
+        // Пытаемся получить точное местоположение с таймаутом
+        val currentLocation = withTimeoutOrNull(LOCATION_TIMEOUT_MS) {
+            getCurrentLocationInternal()
+        }
+
+        // Если таймаут или ошибка, пробуем получить последнее известное местоположение
+        return currentLocation ?: getLastKnownLocation()
+    }
+
+    /**
+     * Внутренний метод получения текущего местоположения без таймаута.
+     */
+    private suspend fun getCurrentLocationInternal(): Location? {
         return suspendCancellableCoroutine { continuation ->
             val cancellationTokenSource = CancellationTokenSource()
 
@@ -61,7 +79,8 @@ class LocationService @Inject constructor(
                 ).addOnSuccessListener { location ->
                     continuation.resume(location)
                 }.addOnFailureListener { exception ->
-                    continuation.resumeWithException(exception)
+                    // При ошибке возвращаем null вместо исключения
+                    continuation.resume(null)
                 }
 
                 continuation.invokeOnCancellation {

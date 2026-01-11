@@ -51,4 +51,20 @@ interface CatchDao {
 
     @Query("SELECT * FROM catches WHERE species LIKE '%' || :query || '%' ORDER BY catch_date DESC")
     fun searchBySpecies(query: String): Flow<List<CatchEntity>>
+
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM catches
+            WHERE species = :species
+            AND catch_date = :date
+            AND activity_type = :activityType
+            AND (location_id = :locationId OR (:locationId IS NULL AND location_id IS NULL))
+        )
+    """)
+    suspend fun isDuplicate(
+        species: String,
+        date: String,
+        activityType: ActivityType,
+        locationId: Long?
+    ): Boolean
 }

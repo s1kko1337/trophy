@@ -15,6 +15,7 @@ import com.example.trophy.domain.repository.EquipmentRepository
 import com.example.trophy.domain.repository.LocationRepository
 import com.example.trophy.domain.repository.PhotoRepository
 import com.example.trophy.service.PhotoService
+import com.example.trophy.presentation.util.ValidationUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,19 +107,18 @@ class AddCatchViewModel @Inject constructor(
     }
 
     fun onWeightChange(weight: String) {
-        // Разрешаем только числа и точку
-        val filtered = weight.filter { it.isDigit() || it == '.' }
-        _uiState.update { it.copy(weight = filtered) }
+        val result = ValidationUtils.validateWeight(weight)
+        _uiState.update { it.copy(weight = result.filteredValue, weightError = result.error) }
     }
 
     fun onLengthChange(length: String) {
-        val filtered = length.filter { it.isDigit() || it == '.' }
-        _uiState.update { it.copy(length = filtered) }
+        val result = ValidationUtils.validateLength(length)
+        _uiState.update { it.copy(length = result.filteredValue, lengthError = result.error) }
     }
 
     fun onQuantityChange(quantity: String) {
-        val filtered = quantity.filter { it.isDigit() }
-        _uiState.update { it.copy(quantity = filtered.ifBlank { "1" }) }
+        val result = ValidationUtils.validateQuantity(quantity)
+        _uiState.update { it.copy(quantity = result.filteredValue, quantityError = result.error) }
     }
 
     fun onNotesChange(notes: String) {
@@ -210,12 +210,18 @@ class AddCatchViewModel @Inject constructor(
         _uiState.update { it.copy(error = null) }
     }
 
-    fun saveCatch() {
+    fun saveCatch(ignoreDuplicate: Boolean = false) {
         val state = _uiState.value
 
         // Валидация
         if (state.species.isBlank()) {
             _uiState.update { it.copy(speciesError = "Укажите вид") }
+            return
+        }
+
+        // Проверка ошибок валидации
+        if (state.weightError != null || state.lengthError != null || state.quantityError != null) {
+            _uiState.update { it.copy(error = "Исправьте ошибки в форме") }
             return
         }
 
@@ -237,6 +243,12 @@ class AddCatchViewModel @Inject constructor(
                     createdAt = LocalDateTime.now(),
                     updatedAt = LocalDateTime.now()
                 )
+
+                // Проверка на дубликат
+                if (!ignoreDuplicate && catchRepository.isDuplicate(catch)) {
+                    _uiState.update { it.copy(isSaving = false, showDuplicateWarning = true) }
+                    return@launch
+                }
 
                 val catchId = catchRepository.insertCatch(catch)
 
@@ -265,5 +277,14 @@ class AddCatchViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun dismissDuplicateWarning() {
+        _uiState.update { it.copy(showDuplicateWarning = false) }
+    }
+
+    fun saveIgnoringDuplicate() {
+        _uiState.update { it.copy(showDuplicateWarning = false) }
+        saveCatch(ignoreDuplicate = true)
     }
 }

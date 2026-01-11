@@ -4,6 +4,7 @@ import com.example.trophy.domain.model.ActivityType
 import com.example.trophy.domain.model.Equipment
 import com.example.trophy.domain.model.Location
 import java.time.LocalDate
+import com.example.trophy.presentation.util.ValidationUtils
 import java.time.LocalTime
 
 /**
@@ -49,19 +50,34 @@ data class AddCatchUiState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val isSaved: Boolean = false,
+    val showDuplicateWarning: Boolean = false,
 
     // Валидация
-    val speciesError: String? = null
+    val speciesError: String? = null,
+    val weightError: String? = null,
+    val lengthError: String? = null,
+    val quantityError: String? = null
 ) {
+    companion object {
+        // Используем константы из ValidationUtils для консистентности
+        val MAX_WEIGHT_KG = ValidationUtils.MAX_WEIGHT_KG
+        val MAX_LENGTH_CM = ValidationUtils.MAX_LENGTH_CM
+        val MAX_QUANTITY = ValidationUtils.MAX_QUANTITY
+    }
+
     val isValid: Boolean
-        get() = species.isNotBlank() && speciesError == null
+        get() = species.isNotBlank() &&
+                speciesError == null &&
+                weightError == null &&
+                lengthError == null &&
+                quantityError == null
 
     val weightDouble: Double?
-        get() = weight.toDoubleOrNull()
+        get() = weight.toDoubleOrNull()?.takeIf { it > 0 }
 
     val lengthDouble: Double?
-        get() = length.toDoubleOrNull()
+        get() = length.toDoubleOrNull()?.takeIf { it > 0 }
 
     val quantityInt: Int
-        get() = quantity.toIntOrNull() ?: 1
+        get() = quantity.toIntOrNull()?.takeIf { it > 0 } ?: 1
 }

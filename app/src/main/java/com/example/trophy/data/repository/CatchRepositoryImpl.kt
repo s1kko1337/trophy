@@ -54,4 +54,13 @@ class CatchRepositoryImpl @Inject constructor(
     override suspend fun deleteCatchById(id: Long) {
         catchDao.deleteById(id)
     }
+
+    override suspend fun isDuplicate(catch: Catch): Boolean {
+        return catchDao.isDuplicate(
+            species = catch.species,
+            date = catch.catchDate.toString(),
+            activityType = catch.activityType,
+            locationId = catch.locationId
+        )
+    }
 }

@@ -24,4 +24,6 @@ interface CatchRepository {
     suspend fun deleteCatch(catch: Catch)
 
     suspend fun deleteCatchById(id: Long)
+
+    suspend fun isDuplicate(catch: Catch): Boolean
 }
